@@ -1,0 +1,71 @@
+#include <Servo.h>
+
+// Ultrasonic Sensor pins
+const int trigPin = 9;   // Trigger pin of ultrasonic sensor
+const int echoPin = 10;  // Echo pin of ultrasonic sensor
+
+// Servo pins
+const int servoPin1 = 5;
+const int servoPin2 = 6;
+
+Servo servo1;
+Servo servo2;
+
+const long detectionDistance = 50; // Threshold in cm
+
+// Initial angles
+int servo1Rest = 0;      // Servo 1 starts at 0° (will move anticlockwise to 90°)
+int servo2Rest = 90;     // Servo 2 starts at 90° (will move clockwise to 0°)
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  servo1.attach(servoPin1);
+  servo2.attach(servoPin2);
+
+  // Set initial positions
+  servo1.write(servo1Rest);
+  servo2.write(servo2Rest);
+}
+
+long getDistanceCM() {
+  // Send trigger pulse
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Read echo pulse
+  long duration = pulseIn(echoPin, HIGH, 30000); // timeout after 30ms
+  // Convert to cm
+  long distance = duration * 0.034 / 2;
+  return distance;
+}
+
+void loop() {
+  long distance = getDistanceCM();
+
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+
+  if (distance > 0 && distance <= detectionDistance) {
+    Serial.println("Obstacle detected within 50 cm! Tilting servos...");
+
+    // Move in opposite directions:
+    servo1.write(60); // Servo 1 anticlockwise from 0° to 90°
+    servo2.write(0);  // Servo 2 clockwise from 90° to 0°
+
+    delay(3000); // Hold position for 3 seconds
+
+    // Return to rest
+    servo1.write(servo1Rest);
+    servo2.write(servo2Rest);
+  }
+
+  delay(200); // Small delay for sensor stability
+}
