@@ -1,0 +1,83 @@
+#include "HX711.h"
+#include <Servo.h>
+
+// HX711 pins
+const int LOADCELL_DOUT_PIN = 3;  // DT
+const int LOADCELL_SCK_PIN  = 2;  // SCK
+
+// Servo pins
+const int SERVO1_PIN = 5;
+const int SERVO2_PIN = 6;
+
+HX711 scale;
+Servo servo1;
+Servo servo2;
+
+long baseline = 0;         // No-load baseline
+long threshold = 50;       // Detection threshold (small for sensitive detection)
+bool tilted = false;
+
+// Smooth movement
+void smoothMove(Servo &s1, Servo &s2, int startAngle, int endAngle, int stepDelay) {
+  if (endAngle > startAngle) {
+    for (int pos = startAngle; pos <= endAngle; pos++) {
+      s1.write(pos);
+      s2.write(pos);
+      delay(stepDelay);
+    }
+  } else {
+    for (int pos = startAngle; pos >= endAngle; pos--) {
+      s1.write(pos);
+      s2.write(pos);
+      delay(stepDelay);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(57600);
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+
+  servo1.attach(SERVO1_PIN);
+  servo2.attach(SERVO2_PIN);
+  servo1.write(0);
+  servo2.write(0);
+
+  delay(2000); // Let HX711 stabilize
+
+  baseline = scale.read_average(10);
+  Serial.print("Baseline (No Load): ");
+  Serial.println(baseline);
+}
+
+void loop() {
+  long reading = scale.read_average(5);
+  long diff = abs(reading - baseline);
+
+  Serial.print("Current: ");
+  Serial.print(reading);
+  Serial.print("\tDiff: ");
+  Serial.println(diff);
+
+  // Detect new object (placement)
+  if (!tilted && diff > threshold) {
+    Serial.println("Load Detected → Tilting...");
+    smoothMove(servo1, servo2, 0, 90, 10);
+    delay(1000); // short hold
+    smoothMove(servo1, servo2, 90, 0, 10);
+    tilted = true;
+  }
+
+  // Reset trigger when object removed (using a margin)
+  if (tilted && diff < (threshold / 2)) { // use half threshold to detect removal
+    Serial.println("Load Removed → Ready for next detection");
+    tilted = false;
+
+    // Optional: re-tare baseline to avoid drift
+    baseline = scale.read_average(10);
+    Serial.print("New Baseline: ");
+    Serial.println(baseline);
+  }
+
+  delay(100);
+}
